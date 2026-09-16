@@ -4,11 +4,11 @@ services:
     container_name: eq_postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: queue_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
 
@@ -17,7 +17,23 @@ services:
     container_name: eq_redis
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT}:6379"
+
+  backend-core:
+    build:
+      context: ./backend-core
+      dockerfile: Dockerfile
+    container_name: eq_backend_core
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    volumes:
+      - ./backend-core:/app
+    depends_on:
+      - postgres
+      - redis
 
 volumes:
   pgdata:
