@@ -1,5 +1,6 @@
 import enum
 from datetime import datetime
+from typing import Optional
 from sqlalchemy import String, Integer, DateTime, Enum, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from src.core.database import Base
@@ -21,3 +22,6 @@ class Ticket(Base):
     
     service_id: Mapped[int] = mapped_column(ForeignKey("services.id"), nullable=False)
     service: Mapped["Service"] = relationship(back_populates="tickets")
+
+    window_id: Mapped[Optional[int]] = mapped_column(ForeignKey("windows.id"), nullable=True)
+    operator_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
