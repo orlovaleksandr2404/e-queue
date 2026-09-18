@@ -8,6 +8,17 @@ from src.schemas.ticket import TicketCreate, TicketRead
 
 router = APIRouter(prefix="/tickets", tags=["Tickets"])
 
+@router.get("/board", response_model=list[TicketRead])
+async def get_board_tickets(db: AsyncSession = Depends(get_db)):
+    query = (
+        select(Ticket)
+        .where(Ticket.status == TicketStatus.CALLED)
+        .order_by(Ticket.created_at.desc())
+        .limit(10)
+    )
+    result = await db.execute(query)
+    return result.scalars().all()
+
 @router.post("", response_model=TicketRead, status_code=status.HTTP_201_CREATED)
 async def issue_ticket(data: TicketCreate, db: AsyncSession = Depends(get_db)):
     service = await db.get(Service, data.service_id)
