@@ -1,3 +1,5 @@
+import os
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -12,14 +14,31 @@ from src.schemas.ticket import TicketRead
 
 router = APIRouter(prefix="/windows", tags=["Windows & Operators"])
 
+QUEUE_SERVICE_URL = os.getenv("QUEUE_SERVICE_URL", "http://backend-queue:8001")
+
 @router.get("", response_model=list[WindowRead])
 async def list_windows(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Window))
     return result.scalars().all()
 
+@router.get("/{window_id}", response_model=WindowRead)
+async def get_window(window_id: int, db: AsyncSession = Depends(get_db)):
+    window = await db.get(Window, window_id)
+    if not window:
+        raise HTTPException(status_code=404, detail="Окно не найдено")
+    return window
+
 @router.post("", response_model=WindowRead, status_code=status.HTTP_201_CREATED)
-async def create_window(data: WindowCreate, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
-    window = Window(name=data.name)
+async def create_window(
+    data: WindowCreate, 
+    db: AsyncSession = Depends(get_db), 
+    user: User = Depends(get_current_user)
+):
+    existing = await db.execute(select(Window).where(Window.number == data.number))
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Окно с таким номером уже существует")
+
+    window = Window(number=data.number, name=data.name)
     if data.service_ids:
         services_res = await db.execute(select(Service).where(Service.id.in_(data.service_ids)))
         window.services = list(services_res.scalars().all())
@@ -43,25 +62,45 @@ async def call_next_ticket(
     if not service_ids:
         raise HTTPException(status_code=400, detail="К данному окну не привязано ни одной услуги")
 
-    query = (
-        select(Ticket)
-        .where(Ticket.status == TicketStatus.WAITING, Ticket.service_id.in_(service_ids))
-        .order_by(Ticket.created_at.asc())
-        .limit(1)
-    )
-    result = await db.execute(query)
-    ticket = result.scalar_one_or_none()
+    chosen_ticket = None
 
-    if not ticket:
+    try:
+        async with httpx.AsyncClient(timeout=1.5) as client:
+            resp = await client.post(
+                f"{QUEUE_SERVICE_URL}/api/v1/algorithm/next-ticket",
+                json={
+                    "window_id": window.id,
+                    "window_number": window.number,
+                    "service_ids": service_ids
+                }
+            )
+            if resp.status_code == 200:
+                ticket_id = resp.json().get("ticket_id")
+                if ticket_id:
+                    chosen_ticket = await db.get(Ticket, ticket_id)
+    except Exception:
+        chosen_ticket = None
+
+    if not chosen_ticket:
+        query = (
+            select(Ticket)
+            .where(Ticket.status == TicketStatus.WAITING, Ticket.service_id.in_(service_ids))
+            .order_by(Ticket.priority.desc(), Ticket.created_at.asc())
+            .limit(1)
+        )
+        result = await db.execute(query)
+        chosen_ticket = result.scalar_one_or_none()
+
+    if not chosen_ticket:
         raise HTTPException(status_code=404, detail="В очереди нет клиентов для данного окна")
 
-    ticket.status = TicketStatus.CALLED
-    ticket.window_id = window.id
-    ticket.operator_id = user.id
+    chosen_ticket.status = TicketStatus.CALLED
+    chosen_ticket.window_id = window.id
+    chosen_ticket.operator_id = user.id
 
     await db.commit()
-    await db.refresh(ticket)
-    return ticket
+    await db.refresh(chosen_ticket)
+    return chosen_ticket
 
 @router.post("/tickets/{ticket_id}/complete", response_model=TicketRead)
 async def complete_ticket(

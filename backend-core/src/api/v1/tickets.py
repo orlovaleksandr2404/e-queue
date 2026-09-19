@@ -33,7 +33,8 @@ async def issue_ticket(data: TicketCreate, db: AsyncSession = Depends(get_db)):
     ticket = Ticket(
         number=ticket_number,
         service_id=service.id,
-        status=TicketStatus.WAITING
+        status=TicketStatus.WAITING,
+        priority=data.priority
     )
     db.add(ticket)
     await db.commit()
