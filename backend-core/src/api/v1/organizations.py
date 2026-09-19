@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from src.core.database import get_db
-from src.core.security import get_current_user
+from src.core.security import require_admin
 from src.models.user import User
 from src.models.organization import Organization
 from src.schemas.organization import OrganizationCreate, OrganizationRead
@@ -25,7 +25,7 @@ async def get_organization(org_id: int, db: AsyncSession = Depends(get_db)):
 async def create_organization(
     data: OrganizationCreate, 
     db: AsyncSession = Depends(get_db), 
-    user: User = Depends(get_current_user)
+    admin=Depends(require_admin)
 ):
     existing = await db.execute(select(Organization).where(Organization.name == data.name))
     if existing.scalar_one_or_none():
