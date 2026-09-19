@@ -15,6 +15,34 @@ from src.schemas.ticket import TicketRead
 router = APIRouter(prefix="/windows", tags=["Windows & Operators"])
 
 QUEUE_SERVICE_URL = os.getenv("QUEUE_SERVICE_URL", "http://backend-queue:8001")
+EVENT_API_KEY = os.getenv("EVENT_API_KEY") or os.getenv("QUEUE_EVENT_KEY", "secret_event_key")
+
+async def send_board_broadcast(event_type: str, ticket: Ticket, window_number: int = None):
+    body = {
+        "type": event_type,
+        "payload": {
+            "ticket_id": ticket.id,
+            "number": ticket.number,
+            "status": ticket.status.value,
+            "window_number": window_number,
+            "service_id": ticket.service_id
+        }
+    }
+    headers = {
+        "X-Api-Key": EVENT_API_KEY,
+        "Content-Type": "application/json"
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=1.5) as client:
+            await client.post(
+                f"{QUEUE_SERVICE_URL}/api/v1/events/broadcast",
+                json=body,
+                headers=headers
+            )
+    except Exception:
+        pass
+
 
 @router.get("", response_model=list[WindowRead])
 async def list_windows(db: AsyncSession = Depends(get_db)):
@@ -61,38 +89,6 @@ async def call_next_ticket(
     service_ids = [s.id for s in window.services]
     if not service_ids:
         raise HTTPException(status_code=400, detail="К данному окну не привязано ни одной услуги")
-
-    chosen_ticket = None
-
-    try:
-        async with httpx.AsyncClient(timeout=1.5) as client:
-            resp = await client.post(
-                f"{QUEUE_SERVICE_URL}/api/v1/algorithm/next-ticket",
-                json={
-                    "window_id": window.id,
-                    "window_number": window.number,
-                    "service_ids": service_ids
-                }
-            )
-            if resp.status_code == 200:
-                ticket_id = resp.json().get("ticket_id")
-                if ticket_id:
-                    chosen_ticket = await db.get(Ticket, ticket_id)
-    except Exception:
-        chosen_ticket = None
-
-    if not chosen_ticket:
-        query = (
-            select(Ticket)
-            .where(Ticket.status == TicketStatus.WAITING, Ticket.service_id.in_(service_ids))
-            .order_by(Ticket.priority.desc(), Ticket.created_at.asc())
-            .limit(1)
-        )
-        result = await db.execute(query)
-        chosen_ticket = result.scalar_one_or_none()
-
-    if not chosen_ticket:
-        raise HTTPException(status_code=404, detail="В очереди нет клиентов для данного окна")
 
     query_waiting = (
         select(Ticket)
@@ -150,6 +146,8 @@ async def call_next_ticket(
 
     await db.commit()
     await db.refresh(chosen_ticket)
+
+    await send_board_broadcast("ticket_called", chosen_ticket, window.number)
     return chosen_ticket
 
 @router.post("/tickets/{ticket_id}/start", response_model=TicketRead)
@@ -167,6 +165,9 @@ async def start_ticket_service(
     ticket.status = TicketStatus.IN_SERVICE
     await db.commit()
     await db.refresh(ticket)
+
+    window = await db.get(Window, ticket.window_id) if ticket.window_id else None
+    await send_board_broadcast("ticket_started", ticket, window.number if window else None)
     return ticket
 
 @router.post("/tickets/{ticket_id}/complete", response_model=TicketRead)
@@ -182,6 +183,9 @@ async def complete_ticket(
     ticket.status = TicketStatus.COMPLETED
     await db.commit()
     await db.refresh(ticket)
+
+    window = await db.get(Window, ticket.window_id) if ticket.window_id else None
+    await send_board_broadcast("ticket_completed", ticket, window.number if window else None)
     return ticket
 
 @router.post("/tickets/{ticket_id}/missed", response_model=TicketRead)
@@ -199,4 +203,7 @@ async def mark_ticket_missed(
     ticket.status = TicketStatus.MISSED
     await db.commit()
     await db.refresh(ticket)
+
+    window = await db.get(Window, ticket.window_id) if ticket.window_id else None
+    await send_board_broadcast("ticket_missed", ticket, window.number if window else None)
     return ticket
