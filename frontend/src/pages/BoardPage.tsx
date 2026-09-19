@@ -1,20 +1,35 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { getBoardTickets, type BoardTicket } from '../api/board';
 import { getWindows } from '../api/windows';
+
+interface WsEvent {
+  type: string;
+  payload: {
+    ticket_id: number;
+    number: string;
+    status: string;
+    window_number: number | null;
+    service_id: number;
+  };
+}
 
 export default function BoardPage() {
   const [tickets, setTickets] = useState<BoardTicket[]>([]);
   const [windowsMap, setWindowsMap] = useState<Record<number, string>>({});
   const [connected, setConnected] = useState(false);
+  const windowNumberToId = useRef<Record<number, number>>({});
 
   useEffect(() => {
     getWindows()
       .then((ws) => {
         const map: Record<number, string> = {};
+        const numToId: Record<number, number> = {};
         ws.forEach((w) => {
           map[w.id] = w.name;
+          numToId[w.number] = w.id;
         });
         setWindowsMap(map);
+        windowNumberToId.current = numToId;
       })
       .catch(() => {});
   }, []);
@@ -33,6 +48,34 @@ export default function BoardPage() {
 
     loadTickets();
 
+    const handleEvent = (event: WsEvent) => {
+      const p = event.payload;
+
+      if (event.type === 'ticket_called') {
+        const windowId = p.window_number
+          ? windowNumberToId.current[p.window_number] ?? null
+          : null;
+        const newTicket: BoardTicket = {
+          id: p.ticket_id,
+          number: p.number,
+          status: p.status,
+          priority: 0,
+          service_id: p.service_id,
+          window_id: windowId,
+          created_at: new Date().toISOString(),
+        };
+        setTickets((prev) => {
+          const without = prev.filter((t) => t.id !== p.ticket_id);
+          return [newTicket, ...without].slice(0, 10);
+        });
+      } else if (
+        event.type === 'ticket_completed' ||
+        event.type === 'ticket_missed'
+      ) {
+        setTickets((prev) => prev.filter((t) => t.id !== p.ticket_id));
+      }
+    };
+
     const connect = () => {
       const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
       const url = `${proto}://${window.location.host}/ws/queue`;
@@ -43,8 +86,15 @@ export default function BoardPage() {
         loadTickets();
       };
 
-      ws.onmessage = () => {
-        loadTickets();
+      ws.onmessage = (msg) => {
+        try {
+          const event = JSON.parse(msg.data) as WsEvent;
+          if (event.type && event.payload) {
+            handleEvent(event);
+          }
+        } catch {
+          loadTickets();
+        }
       };
 
       ws.onclose = () => {
@@ -61,7 +111,7 @@ export default function BoardPage() {
 
     connect();
 
-    pollTimer = window.setInterval(loadTickets, 5000);
+    pollTimer = window.setInterval(loadTickets, 30000);
 
     return () => {
       closed = true;
