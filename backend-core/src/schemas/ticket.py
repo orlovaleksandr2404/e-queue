@@ -5,11 +5,13 @@ from src.models.ticket import TicketStatus
 
 class TicketCreate(BaseModel):
     service_id: int
+    priority: int = 0
 
 class TicketRead(BaseModel):
     id: int
     number: str
     status: TicketStatus
+    priority: int
     service_id: int
     window_id: Optional[int] = None
     created_at: datetime
