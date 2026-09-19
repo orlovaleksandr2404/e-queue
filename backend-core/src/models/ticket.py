@@ -18,6 +18,7 @@ class Ticket(Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     number: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
     status: Mapped[TicketStatus] = mapped_column(Enum(TicketStatus), default=TicketStatus.WAITING, index=True)
+    priority: Mapped[int] = mapped_column(Integer, default=0, nullable=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     
     service_id: Mapped[int] = mapped_column(ForeignKey("services.id"), nullable=False)
