@@ -36,8 +36,8 @@ services:
       dockerfile: Dockerfile
     container_name: eq_backend_queue
     restart: unless-stopped
-    expose:
-      - "8001"
+    ports:
+      - "8001:8001"
     environment:
       CORE_API_URL: "http://backend-core:8000"
       CORE_TIMEOUT: "5"
