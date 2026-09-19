@@ -45,3 +45,12 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: AsyncSession
     if user is None:
         raise credentials_exception
     return user
+
+async def require_admin(current_user=Depends(get_current_user)):
+    from src.models.user import UserRole
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Недостаточно прав: требуется роль администратора"
+        )
+    return current_user
