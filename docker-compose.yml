@@ -24,6 +24,25 @@ services:
     restart: unless-stopped
     ports:
       - "${REDIS_PORT}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  backend-queue:
+    build:
+      context: ./backend-queue
+      dockerfile: Dockerfile
+    container_name: eq_backend_queue
+    restart: unless-stopped
+    expose:
+      - "8001"
+    environment:
+      CORE_API_URL: "http://backend-core:8000"
+      CORE_TIMEOUT: "5"
+      DEFAULT_ACTIVE_WINDOWS: "1"
+      EVENT_API_KEY: "${QUEUE_EVENT_KEY}"
 
   backend-core:
     build:
@@ -35,12 +54,18 @@ services:
       - "8000:8000"
     environment:
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - REDIS_URL=redis://redis:6379/0
+      - QUEUE_API_URL=http://backend-queue:8001
+      - QUEUE_EVENT_KEY=${QUEUE_EVENT_KEY}
+      - SECRET_KEY=${SECRET_KEY}
     volumes:
       - ./backend-core:/app
     depends_on:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_started
+      backend-queue:
         condition: service_started
 
   frontend:
