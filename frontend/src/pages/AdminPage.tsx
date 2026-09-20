@@ -1,13 +1,27 @@
 import { useEffect, useState } from 'react';
+import {
+  login,
+  saveSession,
+  getToken,
+  getRole,
+  clearSession,
+} from '../api/auth';
 import { getOperators, type User } from '../api/users';
 import { getServices, type Service } from '../api/services';
 import { getWindows, createWindow, type Window } from '../api/windows';
 
 export default function AdminPage() {
+  const [token, setToken] = useState<string | null>(getToken());
+  const [role, setRole] = useState<string | null>(getRole());
+
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [loginError, setLoginError] = useState<string | null>(null);
+
   const [operators, setOperators] = useState<User[]>([]);
   const [windows, setWindows] = useState<Window[]>([]);
   const [services, setServices] = useState<Service[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [newNumber, setNewNumber] = useState<string>('');
@@ -16,19 +30,59 @@ export default function AdminPage() {
   const [creating, setCreating] = useState(false);
 
   function loadAll() {
+    setLoading(true);
+    setError(null);
     Promise.all([getOperators(), getWindows(), getServices()])
       .then(([ops, wins, svcs]) => {
         setOperators(ops);
         setWindows(wins);
         setServices(svcs);
       })
-      .catch(() => setError('Не удалось загрузить данные'))
+      .catch((e: any) => {
+        const status = e?.response?.status;
+        if (status === 401 || status === 403) {
+          setError('Нужны права администратора. Войдите заново.');
+          clearSession();
+          setToken(null);
+          setRole(null);
+        } else {
+          setError('Не удалось загрузить данные');
+        }
+      })
       .finally(() => setLoading(false));
   }
 
   useEffect(() => {
-    loadAll();
-  }, []);
+    if (token && role === 'ADMIN') {
+      loadAll();
+    }
+  }, [token, role]);
+
+  async function handleLogin(e: React.FormEvent) {
+    e.preventDefault();
+    setLoginError(null);
+    try {
+      const data = await login(username, password);
+      if (data.role !== 'ADMIN') {
+        setLoginError('Этот аккаунт не является администратором');
+        return;
+      }
+      saveSession(data);
+      setToken(data.access_token);
+      setRole(data.role);
+    } catch {
+      setLoginError('Неверный логин или пароль');
+    }
+  }
+
+  function handleLogout() {
+    clearSession();
+    setToken(null);
+    setRole(null);
+    setOperators([]);
+    setWindows([]);
+    setServices([]);
+  }
 
   function toggleService(id: number) {
     setSelectedServiceIds((prev) =>
@@ -59,11 +113,55 @@ export default function AdminPage() {
     }
   }
 
+  if (!token || role !== 'ADMIN') {
+    return (
+      <div style={{ padding: 32, maxWidth: 400, margin: '0 auto' }}>
+        <h1>Вход администратора</h1>
+        <form onSubmit={handleLogin} style={{ display: 'grid', gap: 12 }}>
+          <input
+            placeholder="Логин"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            style={{ padding: 12, fontSize: 16 }}
+          />
+          <input
+            type="password"
+            placeholder="Пароль"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            style={{ padding: 12, fontSize: 16 }}
+          />
+          <button
+            type="submit"
+            style={{ padding: 12, fontSize: 16, cursor: 'pointer' }}
+          >
+            Войти
+          </button>
+          {loginError && <div style={{ color: 'red' }}>{loginError}</div>}
+        </form>
+      </div>
+    );
+  }
+
   if (loading) return <div style={{ padding: 32 }}>Загрузка…</div>;
 
   return (
     <div style={{ padding: 32, maxWidth: 1000, margin: '0 auto' }}>
-      <h1>Администрирование</h1>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+        }}
+      >
+        <h1>Администрирование</h1>
+        <div>
+          <span style={{ marginRight: 12, color: '#666' }}>{role}</span>
+          <button onClick={handleLogout} style={{ padding: '8px 16px' }}>
+            Выйти
+          </button>
+        </div>
+      </div>
 
       {error && <div style={{ color: 'red', marginTop: 16 }}>{error}</div>}
 
