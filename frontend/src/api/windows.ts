@@ -29,9 +29,23 @@ export async function callNext(windowId: number): Promise<Ticket> {
   return response.data;
 }
 
+export async function startTicket(ticketId: number): Promise<Ticket> {
+  const response = await coreApi.post<Ticket>(
+    `/windows/tickets/${ticketId}/start`,
+  );
+  return response.data;
+}
+
 export async function completeTicket(ticketId: number): Promise<Ticket> {
   const response = await coreApi.post<Ticket>(
     `/windows/tickets/${ticketId}/complete`,
+  );
+  return response.data;
+}
+
+export async function missTicket(ticketId: number): Promise<Ticket> {
+  const response = await coreApi.post<Ticket>(
+    `/windows/tickets/${ticketId}/missed`,
   );
   return response.data;
 }
