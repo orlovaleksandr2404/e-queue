@@ -9,7 +9,9 @@ import {
 import {
   getWindows,
   callNext,
+  startTicket,
   completeTicket,
+  missTicket,
   type Window,
   type Ticket,
 } from '../api/windows';
@@ -73,6 +75,18 @@ export default function OperatorPage() {
     }
   }
 
+  async function handleStart() {
+    if (!currentTicket) return;
+    setActionError(null);
+    try {
+      const t = await startTicket(currentTicket.id);
+      setCurrentTicket(t);
+    } catch (e: any) {
+      const msg = e?.response?.data?.detail ?? 'Ошибка запуска приёма';
+      setActionError(msg);
+    }
+  }
+
   async function handleComplete() {
     if (!currentTicket) return;
     setActionError(null);
@@ -81,6 +95,18 @@ export default function OperatorPage() {
       setCurrentTicket(null);
     } catch (e: any) {
       const msg = e?.response?.data?.detail ?? 'Ошибка завершения';
+      setActionError(msg);
+    }
+  }
+
+  async function handleMissed() {
+    if (!currentTicket) return;
+    setActionError(null);
+    try {
+      await missTicket(currentTicket.id);
+      setCurrentTicket(null);
+    } catch (e: any) {
+      const msg = e?.response?.data?.detail ?? 'Ошибка отметки неявки';
       setActionError(msg);
     }
   }
@@ -126,9 +152,7 @@ export default function OperatorPage() {
       >
         <h1>Кабинет оператора</h1>
         <div>
-          <span style={{ marginRight: 12, color: '#666' }}>
-            {role}
-          </span>
+          <span style={{ marginRight: 12, color: '#666' }}>{role}</span>
           <button onClick={handleLogout} style={{ padding: '8px 16px' }}>
             Выйти
           </button>
@@ -144,7 +168,8 @@ export default function OperatorPage() {
         >
           {windows.map((w) => (
             <option key={w.id} value={w.id}>
-              {w.name} ({w.services.map((s) => s.name).join(', ') || 'нет услуг'})
+              {w.name} (
+              {w.services.map((s) => s.name).join(', ') || 'нет услуг'})
             </option>
           ))}
         </select>
@@ -156,7 +181,9 @@ export default function OperatorPage() {
 
       {currentTicket ? (
         <div style={{ marginTop: 32, textAlign: 'center' }}>
-          <div style={{ fontSize: 20, color: '#666' }}>Вызван клиент:</div>
+          <div style={{ fontSize: 20, color: '#666' }}>
+            Текущий клиент ({currentTicket.status}):
+          </div>
           <div
             style={{
               fontSize: 120,
@@ -166,12 +193,53 @@ export default function OperatorPage() {
           >
             {currentTicket.number}
           </div>
-          <button
-            onClick={handleComplete}
-            style={{ padding: '16px 32px', fontSize: 18, cursor: 'pointer' }}
-          >
-            Завершить приём
-          </button>
+          <div style={{ display: 'flex', gap: 16, justifyContent: 'center' }}>
+            {currentTicket.status === 'CALLED' && (
+              <>
+                <button
+                  onClick={handleStart}
+                  style={{
+                    padding: '16px 32px',
+                    fontSize: 18,
+                    cursor: 'pointer',
+                    background: '#4caf50',
+                    color: 'white',
+                    border: 'none',
+                  }}
+                >
+                  Начать приём
+                </button>
+                <button
+                  onClick={handleMissed}
+                  style={{
+                    padding: '16px 32px',
+                    fontSize: 18,
+                    cursor: 'pointer',
+                    background: '#f44336',
+                    color: 'white',
+                    border: 'none',
+                  }}
+                >
+                  Клиент не явился
+                </button>
+              </>
+            )}
+            {currentTicket.status === 'IN_SERVICE' && (
+              <button
+                onClick={handleComplete}
+                style={{
+                  padding: '16px 32px',
+                  fontSize: 18,
+                  cursor: 'pointer',
+                  background: '#2196f3',
+                  color: 'white',
+                  border: 'none',
+                }}
+              >
+                Завершить приём
+              </button>
+            )}
+          </div>
         </div>
       ) : (
         <div style={{ marginTop: 32 }}>
