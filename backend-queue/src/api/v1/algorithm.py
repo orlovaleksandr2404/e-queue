@@ -12,16 +12,11 @@ router = APIRouter(prefix="/algorithm", tags=["algorithm"])
 
 @router.post("/next-ticket", response_model=NextTicketResponse)
 def next_ticket(req: NextTicketRequest) -> NextTicketResponse:
-
     return algorithm.select_next(req.candidates, req.window_service_ids or None)
 
 
 @router.get("/tickets/{ticket_id}/wait-time", response_model=WaitTimeResponse)
 async def wait_time(ticket_id: int) -> WaitTimeResponse:
-    """
-    Queue тянет данные из Core (read-only внутренний API),
-    считает позицию и ETA, возвращает Core — тот отдаёт фронту.
-    """
     ticket = await core_client.fetch_ticket(ticket_id)
     if ticket.get("status") != "WAITING":
         raise HTTPException(400, "Талон не в статусе ожидания")
