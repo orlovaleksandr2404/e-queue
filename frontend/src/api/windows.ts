@@ -49,3 +49,14 @@ export async function missTicket(ticketId: number): Promise<Ticket> {
   );
   return response.data;
 }
+
+export interface WindowCreate {
+  number: number;
+  name: string;
+  service_ids: number[];
+}
+
+export async function createWindow(data: WindowCreate): Promise<Window> {
+  const response = await coreApi.post<Window>('/windows', data);
+  return response.data;
+}
