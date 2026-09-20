@@ -2,6 +2,7 @@ import { coreApi } from './client';
 
 export interface Window {
   id: number;
+  number: number;
   name: string;
   is_active: boolean;
   services: { id: number; name: string }[];
