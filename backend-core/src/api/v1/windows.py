@@ -58,13 +58,17 @@ async def get_window(window_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.post("", response_model=WindowRead, status_code=status.HTTP_201_CREATED)
 async def create_window(
-    data: WindowCreate, 
-    db: AsyncSession = Depends(get_db), 
+    data: WindowCreate,
+    db: AsyncSession = Depends(get_db),
     admin=Depends(require_admin)
 ):
-    existing = await db.execute(select(Window).where(Window.number == data.number))
-    if existing.scalar_one_or_none():
+    existing_num = await db.execute(select(Window).where(Window.number == data.number))
+    if existing_num.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Окно с таким номером уже существует")
+
+    existing_name = await db.execute(select(Window).where(Window.name == data.name))
+    if existing_name.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Окно с таким названием уже существует")
 
     window = Window(number=data.number, name=data.name)
     if data.service_ids:
@@ -172,13 +176,19 @@ async def start_ticket_service(
 
 @router.post("/tickets/{ticket_id}/complete", response_model=TicketRead)
 async def complete_ticket(
-    ticket_id: int, 
-    db: AsyncSession = Depends(get_db), 
+    ticket_id: int,
+    db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user)
 ):
     ticket = await db.get(Ticket, ticket_id)
     if not ticket:
         raise HTTPException(status_code=404, detail="Талон не найден")
+
+    if ticket.status not in (TicketStatus.CALLED, TicketStatus.IN_SERVICE):
+        raise HTTPException(
+            status_code=400, 
+            detail="Завершить прием можно только для вызванного или обслуживаемого талона"
+        )
 
     ticket.status = TicketStatus.COMPLETED
     await db.commit()
