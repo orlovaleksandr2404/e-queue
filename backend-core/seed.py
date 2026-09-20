@@ -19,7 +19,6 @@ async def seed():
                 hashed_password=hash_password("adminpassword"),
                 full_name="Главный Администратор",
                 role=UserRole.ADMIN,
-                is_active=True
             )
             db.add(admin)
             print("Создан администратор: admin / adminpassword")
@@ -32,7 +31,6 @@ async def seed():
                 hashed_password=hash_password("secretpassword"),
                 full_name="Иванов Иван",
                 role=UserRole.OPERATOR,
-                is_active=True
             )
             db.add(op)
             print("Создан оператор: operator1 / secretpassword")
