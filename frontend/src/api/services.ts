@@ -26,3 +26,7 @@ export async function createTicket(serviceId: number): Promise<Ticket> {
   });
   return response.data;
 }
+
+export async function deleteService(serviceId: number): Promise<void> {
+  await coreApi.delete(`/services/${serviceId}`);
+}
