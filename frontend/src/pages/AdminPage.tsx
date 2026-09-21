@@ -7,7 +7,7 @@ import {
   clearSession,
 } from '../api/auth';
 import { getOperators, type User } from '../api/users';
-import { getServices, type Service } from '../api/services';
+import { getServices, deleteService, type Service } from '../api/services';
 import { getWindows, createWindow, type Window } from '../api/windows';
 
 export default function AdminPage() {
@@ -110,6 +110,18 @@ export default function AdminPage() {
       setError(msg);
     } finally {
       setCreating(false);
+    }
+  }
+
+  async function handleDeleteService(id: number, name: string) {
+    if (!confirm(`Удалить услугу "${name}"?`)) return;
+    setError(null);
+    try {
+      await deleteService(id);
+      loadAll();
+    } catch (e: any) {
+      const msg = e?.response?.data?.detail ?? 'Ошибка удаления услуги';
+      setError(msg);
     }
   }
 
@@ -229,6 +241,41 @@ export default function AdminPage() {
           {creating ? 'Создание…' : 'Создать окно'}
         </button>
       </form>
+
+      <h2 style={{ marginTop: 32 }}>Услуги</h2>
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <thead>
+          <tr style={{ borderBottom: '2px solid #ccc', textAlign: 'left' }}>
+            <th style={{ padding: 8 }}>Префикс</th>
+            <th style={{ padding: 8 }}>Название</th>
+            <th style={{ padding: 8 }}>Ср. время (мин)</th>
+            <th style={{ padding: 8 }}>Действия</th>
+          </tr>
+        </thead>
+        <tbody>
+          {services.map((s) => (
+            <tr key={s.id} style={{ borderBottom: '1px solid #eee' }}>
+              <td style={{ padding: 8 }}>{s.prefix}</td>
+              <td style={{ padding: 8 }}>{s.name}</td>
+              <td style={{ padding: 8 }}>{s.avg_duration_minutes}</td>
+              <td style={{ padding: 8 }}>
+                <button
+                  onClick={() => handleDeleteService(s.id, s.name)}
+                  style={{
+                    padding: '6px 12px',
+                    background: '#f44336',
+                    color: 'white',
+                    border: 'none',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Удалить
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
 
       <h2 style={{ marginTop: 32 }}>Операторы</h2>
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
