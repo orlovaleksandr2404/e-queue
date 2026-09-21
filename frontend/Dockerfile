@@ -1,5 +1,11 @@
 FROM node:20-alpine AS build
 WORKDIR /app
+
+ARG VITE_API_CORE_URL=/api/v1
+ARG VITE_API_QUEUE_URL=/api/queue/v1
+ENV VITE_API_CORE_URL=$VITE_API_CORE_URL
+ENV VITE_API_QUEUE_URL=$VITE_API_QUEUE_URL
+
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
